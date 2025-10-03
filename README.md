@@ -71,6 +71,30 @@ The connection curves are rendered using **WebGL** for optimal performance with 
 - Character-level diff is disabled for lines exceeding 20KB combined length
 - No merge/edit functionality (view-only)
 
+## Testing
+
+Unit tests are available to verify the core diff computation functionality:
+
+```bash
+# Run the test suite
+python3 test_meld_port.py
+
+# Run with verbose output
+python3 test_meld_port.py -v
+
+# Run specific test class
+python3 -m unittest test_meld_port.TestComputeDiff
+
+# Run with coverage (if pytest-cov is installed)
+pytest test_meld_port.py --cov=meld_port --cov-report=html
+```
+
+Tests cover:
+- Diff computation (inserts, deletes, replacements)
+- Character-level inline diffs
+- File validation and limits
+- HTML escaping and safety
+
 ## License
 
 See [LICENSE](LICENSE) file for details.
