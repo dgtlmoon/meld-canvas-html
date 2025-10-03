@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meld Web Port - Diff Viewer</title>
+    <style>
+        :root {
+            --line-height: 20px;
+            --font-size: 13px;
+            --font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family);
+            font-size: var(--font-size);
+            overflow: hidden;
+            background: #2e2e2e;
+        }
+
+        .header {
+            background: #1e1e1e;
+            color: #fff;
+            padding: 10px 20px;
+            border-bottom: 2px solid #0d7377;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: normal;
+            margin: 0;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .controls label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .controls input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        .diff-container {
+            display: grid;
+            grid-template-columns: 1fr 100px 1fr;
+            height: calc(100vh - 50px);
+            overflow: hidden;
+        }
+
+        .file-pane {
+            overflow-y: auto;
+            overflow-x: auto;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: var(--font-family);
+            font-size: var(--font-size);
+            position: relative;
+            scroll-behavior: auto; /* Override to allow manual smooth scrolling */
+        }
+
+        .file-pane .line {
+            display: flex;
+            line-height: var(--line-height);
+            height: var(--line-height);
+            white-space: pre;
+        }
+
+        .file-pane .line:hover {
+            background: #2a2a2a;
+        }
+
+        .file-pane .line-num {
+            display: inline-block;
+            width: 50px;
+            padding: 0 8px;
+            text-align: right;
+            color: #858585;
+            user-select: none;
+            flex-shrink: 0;
+            border-right: 1px solid #3e3e3e;
+        }
+
+        .file-pane .line-content {
+            padding: 0 8px;
+            flex: 1;
+        }
+
+        /* Inline character-level diff highlighting */
+        .inline-diff {
+            background: rgba(255, 200, 100, 0.4);
+            border-radius: 2px;
+            padding: 0 1px;
+        }
+
+        /* Insert/delete markers using border-bottom on lines */
+        .line.insert-marker-after {
+            border-bottom: 1px solid rgba(140, 200, 140, 0.9);
+            box-shadow: 0 1px 2px rgba(140, 200, 140, 0.5);
+        }
+
+        .line.delete-marker-after {
+            border-bottom: 1px solid rgba(240, 140, 140, 0.9);
+            box-shadow: 0 1px 2px rgba(240, 140, 140, 0.5);
+        }
+
+        /* Chunk highlighting */
+        .chunk-insert {
+            background: rgba(140, 200, 140, 0.2);
+        }
+
+        .chunk-delete {
+            background: rgba(240, 140, 140, 0.2);
+        }
+
+        .chunk-replace {
+            background: rgba(140, 180, 240, 0.2);
+        }
+
+        /* Hover and highlight states */
+        .chunk-highlight {
+            background: rgba(255, 255, 100, 0.3) !important;
+        }
+
+        .link-map {
+            width: 100%;
+            height: 100%;
+            background: #2e2e2e;
+            border-left: 1px solid #3e3e3e;
+            border-right: 1px solid #3e3e3e;
+        }
+
+        .link-map path {
+            cursor: pointer;
+            transition: fill 0.15s ease, stroke 0.15s ease;
+        }
+
+        .link-map path:hover {
+            fill-opacity: 0.6;
+            stroke-width: 2;
+        }
+
+        .link-map path.highlighted {
+            fill-opacity: 0.7;
+            stroke-width: 2;
+            filter: brightness(1.3);
+        }
+
+        .stats {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Meld Web Port - Diff Viewer (Proof of Concept)</h1>
+        <div class="controls">
+            <label>
+                <input type="checkbox" id="use-webgl" checked>
+                Use WebGL Rendering (faster for large diffs)
+            </label>
+        </div>
+    </div>
+
+    <div class="diff-container">
+        <div class="file-pane" id="left-pane">
+{{ left_content }}
+        </div>
+
+        <svg id="linkmap" class="link-map" style="display: none;"></svg>
+        <canvas id="linkmap-canvas" class="link-map"></canvas>
+
+        <div class="file-pane" id="right-pane">
+{{ right_content }}
+        </div>
+    </div>
+
+    <div class="stats" id="stats">
+        Chunks: {{ chunk_count }} | Scroll to see connections
+    </div>
+
+    <script>
+        // Chunk data from Python
+        const chunks = {{ chunks_json }};
+
+        class DiffRenderer {
+            constructor(leftPane, rightPane, svgElement, canvasElement) {
+                this.leftPane = leftPane;
+                this.rightPane = rightPane;
+                this.svg = svgElement;
+                this.canvas = canvasElement;
+                this.chunks = chunks;
+                this.useWebGL = true;
+                this.hoveredChunkId = null;
+                this.isScrollingProgrammatically = false;
+
+                // Initialize WebGL
+                this.initWebGL();
+
+                // Throttle updates for better performance
+                this.updatePending = false;
+                this.updateLinkMapThrottled = this.throttle(() => this.updateLinkMap(), 16); // ~60fps
+
+                // Setup scroll listeners - panes scroll independently, just update linkmap
+                this.leftPane.addEventListener('scroll', () => {
+                    if (!this.isScrollingProgrammatically) {
+                        this.updateLinkMapThrottled();
+                    }
+                });
+                this.rightPane.addEventListener('scroll', () => {
+                    if (!this.isScrollingProgrammatically) {
+                        this.updateLinkMapThrottled();
+                    }
+                });
+                window.addEventListener('resize', () => this.updateLinkMapThrottled());
+
+                // Setup ResizeObserver for more reliable updates
+                if (typeof ResizeObserver !== 'undefined') {
+                    const resizeObserver = new ResizeObserver(() => this.updateLinkMapThrottled());
+                    resizeObserver.observe(this.leftPane);
+                    resizeObserver.observe(this.rightPane);
+                }
+
+                // Canvas hover detection
+                this.canvas.addEventListener('mousemove', (e) => this.handleCanvasHover(e));
+                this.canvas.addEventListener('mouseleave', () => this.handleCanvasLeave());
+
+                // Rendering mode toggle
+                document.getElementById('use-webgl').addEventListener('change', (e) => {
+                    this.useWebGL = e.target.checked;
+                    this.svg.style.display = this.useWebGL ? 'none' : 'block';
+                    this.canvas.style.display = this.useWebGL ? 'block' : 'none';
+                    this.updateLinkMap();
+                });
+
+
+                // Initial render
+                this.updateLinkMap();
+                this.drawMarkers();
+            }
+
+            drawMarkers() {
+                // Add CSS classes to lines to show insert/delete markers
+                this.chunks.forEach((chunk) => {
+                    if (chunk.tag === 'insert') {
+                        // Insert in right means we need a marker in left pane
+                        // Add border-bottom to the line BEFORE the insert position
+                        const lineNum = chunk.start_a > 0 ? chunk.start_a - 1 : 0;
+                        const lineElement = this.leftPane.querySelector(`[data-line="${lineNum}"]`);
+                        if (lineElement) {
+                            lineElement.classList.add('insert-marker-after');
+                            lineElement.dataset.markerChunkId = chunk.id;
+                        }
+                    } else if (chunk.tag === 'delete') {
+                        // Delete in left means we need a marker in right pane
+                        const lineNum = chunk.start_b > 0 ? chunk.start_b - 1 : 0;
+                        const lineElement = this.rightPane.querySelector(`[data-line="${lineNum}"]`);
+                        if (lineElement) {
+                            lineElement.classList.add('delete-marker-after');
+                            lineElement.dataset.markerChunkId = chunk.id;
+                        }
+                    }
+                });
+            }
+
+
+            throttle(func, wait) {
+                let timeout;
+                return function(...args) {
+                    if (!timeout) {
+                        timeout = setTimeout(() => {
+                            timeout = null;
+                            func.apply(this, args);
+                        }, wait);
+                    }
+                };
+            }
+
+            initWebGL() {
+                const gl = this.canvas.getContext('webgl', {
+                    alpha: true,
+                    antialias: true,
+                    preserveDrawingBuffer: true
+                });
+
+                if (!gl) {
+                    console.warn('WebGL not supported, falling back to SVG');
+                    this.useWebGL = false;
+                    document.getElementById('use-webgl').checked = false;
+                    document.getElementById('use-webgl').disabled = true;
+                    return;
+                }
+
+                this.gl = gl;
+
+                // Vertex shader - simple pass-through with color
+                const vertexShaderSource = `
+                    attribute vec2 a_position;
+                    attribute vec4 a_color;
+                    varying vec4 v_color;
+                    uniform vec2 u_resolution;
+
+                    void main() {
+                        vec2 clipSpace = (a_position / u_resolution) * 2.0 - 1.0;
+                        gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+                        v_color = a_color;
+                    }
+                `;
+
+                // Fragment shader - simple color
+                const fragmentShaderSource = `
+                    precision mediump float;
+                    varying vec4 v_color;
+
+                    void main() {
+                        gl_FragColor = v_color;
+                    }
+                `;
+
+                // Compile shaders
+                const vertexShader = this.compileShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+                const fragmentShader = this.compileShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+                // Link program
+                const program = gl.createProgram();
+                gl.attachShader(program, vertexShader);
+                gl.attachShader(program, fragmentShader);
+                gl.linkProgram(program);
+
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    console.error('Program link failed:', gl.getProgramInfoLog(program));
+                    return;
+                }
+
+                this.program = program;
+                this.positionLocation = gl.getAttribLocation(program, 'a_position');
+                this.colorLocation = gl.getAttribLocation(program, 'a_color');
+                this.resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
+
+                // Create buffers
+                this.positionBuffer = gl.createBuffer();
+                this.colorBuffer = gl.createBuffer();
+            }
+
+            compileShader(gl, type, source) {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    console.error('Shader compile failed:', gl.getShaderInfoLog(shader));
+                    gl.deleteShader(shader);
+                    return null;
+                }
+
+                return shader;
+            }
+
+            getLinePosition(pane, lineNum) {
+                // Get line element
+                const lineElement = pane.querySelector(`[data-line="${lineNum}"]`);
+                if (!lineElement) return null;
+
+                const paneRect = pane.getBoundingClientRect();
+                const lineRect = lineElement.getBoundingClientRect();
+
+                // Use canvas or SVG as reference depending on current mode
+                const referenceRect = this.useWebGL ? this.canvas.getBoundingClientRect() : this.svg.getBoundingClientRect();
+
+                // Position relative to reference element (SVG or Canvas)
+                return lineRect.top - referenceRect.top + (lineRect.height / 2);
+            }
+
+            getVisibleLines(pane) {
+                const rect = pane.getBoundingClientRect();
+                const firstLine = pane.querySelector('.line');
+                if (!firstLine) return { start: 0, end: 0 };
+
+                const lineHeight = firstLine.offsetHeight;
+                const scrollTop = pane.scrollTop;
+                const paneHeight = pane.clientHeight;
+
+                const startLine = Math.floor(scrollTop / lineHeight);
+                const endLine = Math.ceil((scrollTop + paneHeight) / lineHeight);
+
+                return { start: startLine, end: endLine };
+            }
+
+            isChunkVisible(chunk, leftVisible, rightVisible) {
+                const leftOverlap = chunk.end_a >= leftVisible.start &&
+                                    chunk.start_a <= leftVisible.end;
+                const rightOverlap = chunk.end_b >= rightVisible.start &&
+                                     chunk.start_b <= rightVisible.end;
+                return leftOverlap || rightOverlap;
+            }
+
+            updateLinkMap() {
+                if (this.useWebGL && this.gl) {
+                    this.renderWebGL();
+                } else {
+                    this.renderSVG();
+                }
+            }
+
+            renderSVG() {
+                // Clear existing paths
+                this.svg.innerHTML = '';
+
+                const leftVisible = this.getVisibleLines(this.leftPane);
+                const rightVisible = this.getVisibleLines(this.rightPane);
+
+                const svgWidth = this.svg.clientWidth;
+                const svgHeight = this.svg.clientHeight;
+
+                // Set SVG viewBox
+                this.svg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
+
+                let renderedCount = 0;
+
+                // Draw paths for each chunk
+                this.chunks.forEach((chunk, index) => {
+                    // Check if chunk is in visible range
+                    if (!this.isChunkVisible(chunk, leftVisible, rightVisible)) {
+                        return;
+                    }
+
+                    const path = this.createChunkPath(chunk, svgWidth);
+                    if (path) {
+                        // Add chunk ID as data attribute
+                        path.setAttribute('data-chunk-id', chunk.id);
+
+                        // Setup hover handlers
+                        path.addEventListener('mouseenter', (e) => this.highlightChunk(chunk.id));
+                        path.addEventListener('mouseleave', (e) => this.unhighlightChunk(chunk.id));
+
+                        this.svg.appendChild(path);
+                        renderedCount++;
+                    }
+                });
+
+                // Update stats
+                document.getElementById('stats').textContent =
+                    `Chunks: ${this.chunks.length} | Rendered: ${renderedCount} | Mode: SVG`;
+            }
+
+            renderWebGL() {
+                const gl = this.gl;
+                if (!gl) return;
+
+                const leftVisible = this.getVisibleLines(this.leftPane);
+                const rightVisible = this.getVisibleLines(this.rightPane);
+
+                const width = this.canvas.clientWidth;
+                const height = this.canvas.clientHeight;
+
+                // Set canvas size accounting for device pixel ratio
+                const dpr = window.devicePixelRatio || 1;
+                this.canvas.width = width * dpr;
+                this.canvas.height = height * dpr;
+
+                gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                // Enable blending for transparency
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+                // Use shader program
+                gl.useProgram(this.program);
+                gl.uniform2f(this.resolutionLocation, this.canvas.width, this.canvas.height);
+
+                let positions = [];
+                let colors = [];
+                let renderedCount = 0;
+
+                // Generate geometry for visible chunks
+                this.visibleChunks = []; // Store for hover detection
+
+                this.chunks.forEach((chunk) => {
+                    if (!this.isChunkVisible(chunk, leftVisible, rightVisible)) {
+                        return;
+                    }
+
+                    // Calculate line positions
+                    // For insert/delete chunks, use the marker line position
+                    let leftLineStart = chunk.start_a;
+                    let leftLineEnd = Math.max(chunk.start_a, chunk.end_a - 1);
+                    let rightLineStart = chunk.start_b;
+                    let rightLineEnd = Math.max(chunk.start_b, chunk.end_b - 1);
+
+                    // For insert chunks, the marker is on the line BEFORE start_a
+                    if (chunk.tag === 'insert' && chunk.start_a > 0) {
+                        leftLineStart = chunk.start_a - 1;
+                        leftLineEnd = chunk.start_a - 1;
+                    }
+                    // For delete chunks, the marker is on the line BEFORE start_b
+                    if (chunk.tag === 'delete' && chunk.start_b > 0) {
+                        rightLineStart = chunk.start_b - 1;
+                        rightLineEnd = chunk.start_b - 1;
+                    }
+
+                    const leftY0 = this.getLinePosition(this.leftPane, leftLineStart);
+                    const leftY1 = this.getLinePosition(this.leftPane, leftLineEnd);
+                    const rightY0 = this.getLinePosition(this.rightPane, rightLineStart);
+                    const rightY1 = this.getLinePosition(this.rightPane, rightLineEnd);
+
+                    if (leftY0 === null || rightY0 === null) return;
+
+                    // Clamp positions to visible area (with small margin)
+                    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+                    const clampedLeftY0 = clamp(leftY0, -10, height + 10);
+                    const clampedLeftY1 = clamp(leftY1 || leftY0, -10, height + 10);
+                    const clampedRightY0 = clamp(rightY0, -10, height + 10);
+                    const clampedRightY1 = clamp(rightY1 || rightY0, -10, height + 10);
+
+                    let ly0 = clampedLeftY0 * dpr;
+                    let ly1 = clampedLeftY1 * dpr;
+                    let ry0 = clampedRightY0 * dpr;
+                    let ry1 = clampedRightY1 * dpr;
+
+                    // Ensure minimum height for visibility (especially single-line chunks)
+                    const MIN_HEIGHT = 3 * dpr; // 3px minimum height
+                    if (Math.abs(ly1 - ly0) < MIN_HEIGHT) {
+                        // Expand left side slightly for visibility
+                        ly0 -= MIN_HEIGHT / 2;
+                        ly1 += MIN_HEIGHT / 2;
+                    }
+                    if (Math.abs(ry1 - ry0) < MIN_HEIGHT) {
+                        // Expand right side slightly for visibility
+                        ry0 -= MIN_HEIGHT / 2;
+                        ry1 += MIN_HEIGHT / 2;
+                    }
+
+                    const x0 = 0;
+                    const x1 = (width / 2) * dpr; // Middle control point
+                    const x2 = width * dpr;
+
+                    // Store chunk bounds for hover detection
+                    this.visibleChunks.push({
+                        id: chunk.id,
+                        x0, x2, ly0, ly1, ry0, ry1,
+                        tag: chunk.tag,
+                        start_a: chunk.start_a,
+                        end_a: chunk.end_a,
+                        start_b: chunk.start_b,
+                        end_b: chunk.end_b
+                    });
+
+                    // Get color
+                    const color = this.getColorForTag(chunk.tag, chunk.id === this.hoveredChunkId);
+
+                    // Generate bezier curve approximation using multiple segments
+                    const segments = 20; // Number of segments for smooth curve
+
+                    // Create the filled shape exactly like SVG does:
+                    // Path: M x0,ly0 C x1,ly0 x1,ry0 x2,ry0 L x2,ry1 C x1,ry1 x1,ly1 x0,ly1 Z
+
+                    // Generate points along the top curve (left to right)
+                    const topPoints = [];
+                    for (let i = 0; i <= segments; i++) {
+                        const t = i / segments;
+                        const t2 = t * t;
+                        const t3 = t2 * t;
+                        const mt = 1 - t;
+                        const mt2 = mt * mt;
+                        const mt3 = mt2 * mt;
+
+                        // Cubic bezier: (x0,ly0) -> (x1,ly0) -> (x1,ry0) -> (x2,ry0)
+                        const x = mt3 * x0 + 3 * mt2 * t * x1 + 3 * mt * t2 * x1 + t3 * x2;
+                        const y = mt3 * ly0 + 3 * mt2 * t * ly0 + 3 * mt * t2 * ry0 + t3 * ry0;
+                        topPoints.push(x, y);
+                    }
+
+                    // Generate points along the bottom curve (left to right, SAME direction as top)
+                    // Then we'll traverse it backwards when creating triangles
+                    const bottomPoints = [];
+                    for (let i = 0; i <= segments; i++) {
+                        const t = i / segments;
+                        const t2 = t * t;
+                        const t3 = t2 * t;
+                        const mt = 1 - t;
+                        const mt2 = mt * mt;
+                        const mt3 = mt2 * mt;
+
+                        // Cubic bezier: (x0,ly1) -> (x1,ly1) -> (x1,ry1) -> (x2,ry1)
+                        const x = mt3 * x0 + 3 * mt2 * t * x1 + 3 * mt * t2 * x1 + t3 * x2;
+                        const y = mt3 * ly1 + 3 * mt2 * t * ly1 + 3 * mt * t2 * ry1 + t3 * ry1;
+                        bottomPoints.push(x, y);
+                    }
+
+                    // Create triangle strip between the two curves
+                    // This creates a proper filled shape without twisting
+                    for (let i = 0; i < segments; i++) {
+                        const topX1 = topPoints[i * 2];
+                        const topY1 = topPoints[i * 2 + 1];
+                        const topX2 = topPoints[(i + 1) * 2];
+                        const topY2 = topPoints[(i + 1) * 2 + 1];
+
+                        const bottomX1 = bottomPoints[i * 2];
+                        const bottomY1 = bottomPoints[i * 2 + 1];
+                        const bottomX2 = bottomPoints[(i + 1) * 2];
+                        const bottomY2 = bottomPoints[(i + 1) * 2 + 1];
+
+                        // First triangle
+                        positions.push(
+                            topX1, topY1,
+                            bottomX1, bottomY1,
+                            topX2, topY2
+                        );
+                        for (let j = 0; j < 3; j++) colors.push(...color);
+
+                        // Second triangle
+                        positions.push(
+                            topX2, topY2,
+                            bottomX1, bottomY1,
+                            bottomX2, bottomY2
+                        );
+                        for (let j = 0; j < 3; j++) colors.push(...color);
+                    }
+
+                    renderedCount++;
+                });
+
+                if (positions.length > 0) {
+                    // Upload position data
+                    gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+                    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+                    gl.enableVertexAttribArray(this.positionLocation);
+                    gl.vertexAttribPointer(this.positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+                    // Upload color data
+                    gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
+                    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+                    gl.enableVertexAttribArray(this.colorLocation);
+                    gl.vertexAttribPointer(this.colorLocation, 4, gl.FLOAT, false, 0, 0);
+
+                    // Draw
+                    gl.drawArrays(gl.TRIANGLES, 0, positions.length / 2);
+                }
+
+                // Update stats
+                document.getElementById('stats').textContent =
+                    `Chunks: ${this.chunks.length} | Rendered: ${renderedCount} | Mode: WebGL`;
+            }
+
+
+            getColorForTag(tag, isHovered) {
+                const alpha = isHovered ? 0.6 : 0.3;
+                const colors = {
+                    'insert': [0.55, 0.78, 0.55, alpha],
+                    'delete': [0.94, 0.55, 0.55, alpha],
+                    'replace': [0.55, 0.71, 0.94, alpha]
+                };
+                return colors[tag] || colors['replace'];
+            }
+
+            handleCanvasHover(e) {
+                if (!this.useWebGL) return;
+
+                const rect = this.canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Check which chunk was hovered
+                let foundChunk = null;
+                for (const chunk of this.visibleChunks || []) {
+                    // Simple bounding box check
+                    const minY = Math.min(chunk.ly0, chunk.ry0);
+                    const maxY = Math.max(chunk.ly1, chunk.ry1);
+
+                    if (y >= minY && y <= maxY) {
+                        foundChunk = chunk;
+                        break;
+                    }
+                }
+
+                const newHoveredId = foundChunk ? foundChunk.id : null;
+
+                if (newHoveredId !== this.hoveredChunkId) {
+                    if (this.hoveredChunkId !== null) {
+                        this.unhighlightChunk(this.hoveredChunkId);
+                    }
+
+                    this.hoveredChunkId = newHoveredId;
+
+                    if (this.hoveredChunkId !== null) {
+                        this.highlightChunk(this.hoveredChunkId);
+                        this.canvas.style.cursor = 'pointer';
+                    } else {
+                        this.canvas.style.cursor = 'default';
+                    }
+
+                    this.renderWebGL(); // Re-render to show hover effect
+                }
+            }
+
+            handleCanvasLeave() {
+                if (this.hoveredChunkId !== null) {
+                    this.unhighlightChunk(this.hoveredChunkId);
+                    this.hoveredChunkId = null;
+                    this.canvas.style.cursor = 'default';
+                    this.renderWebGL();
+                }
+            }
+
+            createChunkPath(chunk, svgWidth) {
+                // Calculate Y positions
+                // For insert/delete chunks, use the marker line position
+                let leftLineStart = chunk.start_a;
+                let leftLineEnd = Math.max(chunk.start_a, chunk.end_a - 1);
+                let rightLineStart = chunk.start_b;
+                let rightLineEnd = Math.max(chunk.start_b, chunk.end_b - 1);
+
+                // For insert chunks, the marker is on the line BEFORE start_a
+                if (chunk.tag === 'insert' && chunk.start_a > 0) {
+                    leftLineStart = chunk.start_a - 1;
+                    leftLineEnd = chunk.start_a - 1;
+                }
+                // For delete chunks, the marker is on the line BEFORE start_b
+                if (chunk.tag === 'delete' && chunk.start_b > 0) {
+                    rightLineStart = chunk.start_b - 1;
+                    rightLineEnd = chunk.start_b - 1;
+                }
+
+                const leftY0 = this.getLinePosition(this.leftPane, leftLineStart);
+                const leftY1 = this.getLinePosition(this.leftPane, leftLineEnd);
+                const rightY0 = this.getLinePosition(this.rightPane, rightLineStart);
+                const rightY1 = this.getLinePosition(this.rightPane, rightLineEnd);
+
+                // Skip if positions couldn't be calculated
+                if (leftY0 === null || rightY0 === null) return null;
+
+                const x0 = 0;
+                const x1 = svgWidth / 2;
+                const x2 = svgWidth;
+
+                // Create bezier curve path (similar to Meld's implementation)
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
+                // Handle insert/delete cases where one side has no height
+                let ly0 = leftY0 || 0;
+                let ly1 = leftY1 || leftY0 || 0;
+                let ry0 = rightY0 || 0;
+                let ry1 = rightY1 || rightY0 || 0;
+
+                // Pixel-perfect positioning: use -0.5 offsets for crisp rendering
+                ly0 -= 0.5;
+                ly1 = (ly1 === ly0 + 0.5) ? ly1 : ly1 - 1.5;
+                ry0 -= 0.5;
+                ry1 = (ry1 === ry0 + 0.5) ? ry1 : ry1 - 1.5;
+
+                const svgHeight = this.svg.clientHeight;
+                const RADIUS = 3;
+
+                // Clamp positions to visible area for off-screen chunks
+                // This ensures curves to off-screen lines still show a visible connection
+                const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+                ly0 = clamp(ly0, -10, svgHeight + 10);
+                ly1 = clamp(ly1, -10, svgHeight + 10);
+                ry0 = clamp(ry0, -10, svgHeight + 10);
+                ry1 = clamp(ry1, -10, svgHeight + 10);
+
+                // Rounded rectangle culling for off-screen chunks (like Meld)
+                let pathData;
+
+                // If right side is completely off-screen (top or bottom)
+                if ((ry0 < 0 && ry1 < 0) || (ry0 > svgHeight && ry1 > svgHeight)) {
+                    if (ly0 === ly1) return null; // Skip if no height
+
+                    // Draw rounded rectangle on left side only
+                    pathData = `
+                        M ${x0},${ly0 + RADIUS}
+                        A ${RADIUS},${RADIUS} 0 0 1 ${x0 + RADIUS},${ly0}
+                        L ${x0 + RADIUS},${ly0}
+                        A ${RADIUS},${RADIUS} 0 0 1 ${x0},${ly0 + RADIUS}
+                        L ${x0},${ly1 - RADIUS}
+                        A ${RADIUS},${RADIUS} 0 0 1 ${x0 + RADIUS},${ly1}
+                        L ${x0 + RADIUS},${ly1}
+                        A ${RADIUS},${RADIUS} 0 0 1 ${x0},${ly1 - RADIUS}
+                        Z
+                    `.trim().replace(/\s+/g, ' ');
+                }
+                // If left side is completely off-screen (top or bottom)
+                else if ((ly0 < 0 && ly1 < 0) || (ly0 > svgHeight && ly1 > svgHeight)) {
+                    if (ry0 === ry1) return null; // Skip if no height
+
+                    // Draw rounded rectangle on right side only
+                    pathData = `
+                        M ${x2},${ry0 + RADIUS}
+                        A ${RADIUS},${RADIUS} 0 0 0 ${x2 - RADIUS},${ry0}
+                        L ${x2 - RADIUS},${ry0}
+                        A ${RADIUS},${RADIUS} 0 0 0 ${x2},${ry0 + RADIUS}
+                        L ${x2},${ry1 - RADIUS}
+                        A ${RADIUS},${RADIUS} 0 0 0 ${x2 - RADIUS},${ry1}
+                        L ${x2 - RADIUS},${ry1}
+                        A ${RADIUS},${RADIUS} 0 0 0 ${x2},${ry1 - RADIUS}
+                        Z
+                    `.trim().replace(/\s+/g, ' ');
+                }
+                // Normal case: both sides visible
+                else {
+                    pathData = `
+                        M ${x0},${ly0}
+                        C ${x1},${ly0} ${x1},${ry0} ${x2},${ry0}
+                        L ${x2},${ry1}
+                        C ${x1},${ry1} ${x1},${ly1} ${x0},${ly1}
+                        Z
+                    `.trim().replace(/\s+/g, ' ');
+                }
+
+                path.setAttribute('d', pathData);
+
+                const color = this.getChunkColor(chunk.tag);
+                path.setAttribute('fill', color.fill);
+                path.setAttribute('stroke', color.stroke);
+                path.setAttribute('stroke-width', '1');
+
+                return path;
+            }
+
+            getChunkColor(tag) {
+                const colors = {
+                    'insert': {
+                        fill: 'rgba(140, 200, 140, 0.3)',
+                        stroke: 'rgba(140, 200, 140, 1)'
+                    },
+                    'delete': {
+                        fill: 'rgba(240, 140, 140, 0.3)',
+                        stroke: 'rgba(240, 140, 140, 1)'
+                    },
+                    'replace': {
+                        fill: 'rgba(140, 180, 240, 0.3)',
+                        stroke: 'rgba(140, 180, 240, 1)'
+                    }
+                };
+                return colors[tag] || colors['replace'];
+            }
+
+            highlightChunk(chunkId) {
+                const chunk = this.chunks[chunkId];
+                if (!chunk) return;
+
+                // Highlight the SVG path
+                const path = this.svg.querySelector(`[data-chunk-id="${chunkId}"]`);
+                if (path) {
+                    path.classList.add('highlighted');
+                }
+
+                // Highlight lines in left pane
+                for (let i = chunk.start_a; i < chunk.end_a; i++) {
+                    const line = this.leftPane.querySelector(`[data-line="${i}"]`);
+                    if (line) line.classList.add('chunk-highlight');
+                }
+
+                // Highlight lines in right pane
+                for (let i = chunk.start_b; i < chunk.end_b; i++) {
+                    const line = this.rightPane.querySelector(`[data-line="${i}"]`);
+                    if (line) line.classList.add('chunk-highlight');
+                }
+            }
+
+            unhighlightChunk(chunkId) {
+                const chunk = this.chunks[chunkId];
+                if (!chunk) return;
+
+                // Remove highlight from SVG path
+                const path = this.svg.querySelector(`[data-chunk-id="${chunkId}"]`);
+                if (path) {
+                    path.classList.remove('highlighted');
+                }
+
+                // Remove highlight from left pane lines
+                for (let i = chunk.start_a; i < chunk.end_a; i++) {
+                    const line = this.leftPane.querySelector(`[data-line="${i}"]`);
+                    if (line) line.classList.remove('chunk-highlight');
+                }
+
+                // Remove highlight from right pane lines
+                for (let i = chunk.start_b; i < chunk.end_b; i++) {
+                    const line = this.rightPane.querySelector(`[data-line="${i}"]`);
+                    if (line) line.classList.remove('chunk-highlight');
+                }
+            }
+        }
+
+        // Initialize the diff renderer
+        const leftPane = document.getElementById('left-pane');
+        const rightPane = document.getElementById('right-pane');
+        const linkmap = document.getElementById('linkmap');
+        const linkmapCanvas = document.getElementById('linkmap-canvas');
+
+        const renderer = new DiffRenderer(leftPane, rightPane, linkmap, linkmapCanvas);
+
+        // Log initialization
+        console.log('Diff renderer initialized with', chunks.length, 'chunks');
+    </script>
+</body>
+</html>

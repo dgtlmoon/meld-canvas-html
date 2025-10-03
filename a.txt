@@ -1,0 +1,686 @@
+# E-commerce System - Version 1.0
+# Basic implementation of shopping cart and order processing
+
+import datetime
+import logging
+from decimal import Decimal
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.stock = 0
+
+    def update_stock(self, quantity):
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} - ${self.price}"
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+def calculate_total(items):
+    total = Decimal('0')
+    for item in items:
+        total += item.get_subtotal()
+    return total
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items)
+
+    if total > 100:
+        discount = total * Decimal('0.1')
+        total = total - discount
+
+    return total
+
+class ShoppingCart:
+    def __init__(self):
+        self.items = []
+        self.created_at = datetime.datetime.now()
+
+    def add_item(self, product, quantity=1):
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+
+    def get_total(self):
+        return calculate_total(self.items)
+
+    def clear(self):
+        self.items = []
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        logger.info(f"Order confirmed for {self.customer}")
+
+class Customer:
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
+        self.orders = []
+
+    def place_order(self, cart):
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    return "@" in email and "." in email
+
+# E-commerce System - Version 1.0
+# Basic implementation of shopping cart and order processing
+
+import datetime
+import logging
+from decimal import Decimal
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.stock = 0
+
+    def update_stock(self, quantity):
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} - ${self.price}"
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+def calculate_total(items):
+    total = Decimal('0')
+    for item in items:
+        total += item.get_subtotal()
+    return total
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items)
+
+    if total > 100:
+        discount = total * Decimal('0.1')
+        total = total - discount
+
+    return total
+
+class ShoppingCart:
+    def __init__(self):
+        self.items = []
+        self.created_at = datetime.datetime.now()
+
+    def add_item(self, product, quantity=1):
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+
+    def get_total(self):
+        return calculate_total(self.items)
+
+    def clear(self):
+        self.items = []
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        logger.info(f"Order confirmed for {self.customer}")
+
+class Customer:
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
+        self.orders = []
+
+    def place_order(self, cart):
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    return "@" in email and "." in email
+
+# E-commerce System - Version 1.0
+# Basic implementation of shopping cart and order processing
+
+import datetime
+import logging
+from decimal import Decimal
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.stock = 0
+
+    def update_stock(self, quantity):
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} - ${self.price}"
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+def calculate_total(items):
+    total = Decimal('0')
+    for item in items:
+        total += item.get_subtotal()
+    return total
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items)
+
+    if total > 100:
+        discount = total * Decimal('0.1')
+        total = total - discount
+
+    return total
+
+class ShoppingCart:
+    def __init__(self):
+        self.items = []
+        self.created_at = datetime.datetime.now()
+
+    def add_item(self, product, quantity=1):
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+
+    def get_total(self):
+        return calculate_total(self.items)
+
+    def clear(self):
+        self.items = []
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        logger.info(f"Order confirmed for {self.customer}")
+
+class Customer:
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
+        self.orders = []
+
+    def place_order(self, cart):
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    return "@" in email and "." in email
+
+# E-commerce System - Version 1.0
+# Basic implementation of shopping cart and order processing
+
+import datetime
+import logging
+from decimal import Decimal
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.stock = 0
+
+    def update_stock(self, quantity):
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} - ${self.price}"
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+def calculate_total(items):
+    total = Decimal('0')
+    for item in items:
+        total += item.get_subtotal()
+    return total
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items)
+
+    if total > 100:
+        discount = total * Decimal('0.1')
+        total = total - discount
+
+    return total
+
+class ShoppingCart:
+    def __init__(self):
+        self.items = []
+        self.created_at = datetime.datetime.now()
+
+    def add_item(self, product, quantity=1):
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+
+    def get_total(self):
+        return calculate_total(self.items)
+
+    def clear(self):
+        self.items = []
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        logger.info(f"Order confirmed for {self.customer}")
+
+class Customer:
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
+        self.orders = []
+
+    def place_order(self, cart):
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    return "@" in email and "." in email
+
+# E-commerce System - Version 1.0
+# Basic implementation of shopping cart and order processing
+
+import datetime
+import logging
+from decimal import Decimal
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.stock = 0
+
+    def update_stock(self, quantity):
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} - ${self.price}"
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+def calculate_total(items):
+    total = Decimal('0')
+    for item in items:
+        total += item.get_subtotal()
+    return total
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items)
+
+    if total > 100:
+        discount = total * Decimal('0.1')
+        total = total - discount
+
+    return total
+
+class ShoppingCart:
+    def __init__(self):
+        self.items = []
+        self.created_at = datetime.datetime.now()
+
+    def add_item(self, product, quantity=1):
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+
+    def get_total(self):
+        return calculate_total(self.items)
+
+    def clear(self):
+        self.items = []
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        logger.info(f"Order confirmed for {self.customer}")
+
+class Customer:
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
+        self.orders = []
+
+    def place_order(self, cart):
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    return "@" in email and "." in email
+
+# E-commerce System - Version 1.0
+# Basic implementation of shopping cart and order processing
+
+import datetime
+import logging
+from decimal import Decimal
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.stock = 0
+
+    def update_stock(self, quantity):
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} - ${self.price}"
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+def calculate_total(items):
+    total = Decimal('0')
+    for item in items:
+        total += item.get_subtotal()
+    return total
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items)
+
+    if total > 100:
+        discount = total * Decimal('0.1')
+        total = total - discount
+
+    return total
+
+class ShoppingCart:
+    def __init__(self):
+        self.items = []
+        self.created_at = datetime.datetime.now()
+
+    def add_item(self, product, quantity=1):
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+
+    def get_total(self):
+        return calculate_total(self.items)
+
+    def clear(self):
+        self.items = []
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        logger.info(f"Order confirmed for {self.customer}")
+
+class Customer:
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
+        self.orders = []
+
+    def place_order(self, cart):
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    return "@" in email and "." in email
+
+# E-commerce System - Version 1.0
+# Basic implementation of shopping cart and order processing
+
+import datetime
+import logging
+from decimal import Decimal
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.stock = 0
+
+    def update_stock(self, quantity):
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} - ${self.price}"
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+def calculate_total(items):
+    total = Decimal('0')
+    for item in items:
+        total += item.get_subtotal()
+    return total
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items)
+
+    if total > 100:
+        discount = total * Decimal('0.1')
+        total = total - discount
+
+    return total
+
+class ShoppingCart:
+    def __init__(self):
+        self.items = []
+        self.created_at = datetime.datetime.now()
+
+    def add_item(self, product, quantity=1):
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+
+    def get_total(self):
+        return calculate_total(self.items)
+
+    def clear(self):
+        self.items = []
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        logger.info(f"Order confirmed for {self.customer}")
+
+class Customer:
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
+        self.orders = []
+
+    def place_order(self, cart):
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    return "@" in email and "." in email
+

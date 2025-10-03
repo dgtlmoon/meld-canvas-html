@@ -1,0 +1,1062 @@
+# E-commerce System - Version 2.0
+# Enhanced implementation with tax, discounts, and better validation
+
+import datetime
+import logging
+from decimal import Decimal
+from typing import List, Optional
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category, description=""):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.description = description
+        self.stock = 0
+        self.sku = f"SKU-{id}"
+
+    def update_stock(self, quantity):
+        if self.stock + quantity < 0:
+            raise ValueError("Insufficient stock")
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} ({self.sku}) - ${self.price}"
+
+    def is_available(self):
+        return self.stock > 0
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        if quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+    def update_quantity(self, new_quantity):
+        if new_quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.quantity = new_quantity
+
+def calculate_total(items, tax_rate=Decimal('0.0')):
+    """Calculate total price including tax"""
+    subtotal = Decimal('0')
+    for item in items:
+        subtotal += item.get_subtotal()
+
+    tax = subtotal * tax_rate
+    return subtotal + tax
+
+def apply_discount(total, discount_rate):
+    """Apply discount to total"""
+    return total * (Decimal('1') - discount_rate)
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items, tax_rate=Decimal('0.08'))
+
+    if total > 100:
+        total = apply_discount(total, Decimal('0.1'))
+
+    # Apply coupon if available
+    if order.coupon_code:
+        total = apply_coupon(total, order.coupon_code)
+
+    # Log the order
+    logger.info(f"Order processed: ${total:.2f}")
+
+    return total
+
+def apply_coupon(total, coupon_code):
+    """Apply coupon discount"""
+    # Simple coupon validation
+    if coupon_code == "SAVE10":
+        return total * Decimal('0.9')
+    return total
+
+class ShoppingCart:
+    def __init__(self, customer=None):
+        self.items: List[CartItem] = []
+        self.customer = customer
+        self.created_at = datetime.datetime.now()
+        self.updated_at = self.created_at
+
+    def add_item(self, product, quantity=1):
+        if not product.is_available():
+            raise ValueError("Product not available")
+
+        # Check if product already in cart
+        for item in self.items:
+            if item.product.id == product.id:
+                item.update_quantity(item.quantity + quantity)
+                self.updated_at = datetime.datetime.now()
+                return
+
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+        self.updated_at = datetime.datetime.now()
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+        self.updated_at = datetime.datetime.now()
+
+    def get_total(self):
+        return calculate_total(self.items, tax_rate=Decimal('0.08'))
+
+    def clear(self):
+        self.items = []
+        self.updated_at = datetime.datetime.now()
+
+    def get_item_count(self):
+        return sum(item.quantity for item in self.items)
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+        self.coupon_code = None
+        self.tracking_number = None
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        self.tracking_number = self._generate_tracking_number()
+        logger.info(f"Order confirmed for {self.customer.name}")
+
+    def _generate_tracking_number(self):
+        return f"TRK{self.order_date.timestamp()}"
+
+    def cancel(self):
+        if self.status == "shipped":
+            raise ValueError("Cannot cancel shipped order")
+        self.status = "cancelled"
+
+class Customer:
+    def __init__(self, name, email, phone=""):
+        self.name = name
+        self.email = email
+        self.phone = phone
+        self.orders: List[Order] = []
+        self.loyalty_points = 0
+
+    def place_order(self, cart):
+        if not self.email:
+            raise ValueError("Customer email required")
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+    def add_loyalty_points(self, points):
+        self.loyalty_points += points
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    if not email:
+        return False
+    return "@" in email and "." in email and len(email) > 5
+
+def send_confirmation_email(customer, order):
+    """Send order confirmation email"""
+    logger.info(f"Sending confirmation to {customer.email}")
+    # Email sending logic here
+    pass
+
+# E-commerce System - Version 2.0
+# Enhanced implementation with tax, discounts, and better validation
+
+import datetime
+import logging
+from decimal import Decimal
+from typing import List, Optional
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category, description=""):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.description = description
+        self.stock = 0
+        self.sku = f"SKU-{id}"
+
+    def update_stock(self, quantity):
+        if self.stock + quantity < 0:
+            raise ValueError("Insufficient stock")
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} ({self.sku}) - ${self.price}"
+
+    def is_available(self):
+        return self.stock > 0
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        if quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+    def update_quantity(self, new_quantity):
+        if new_quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.quantity = new_quantity
+
+def calculate_total(items, tax_rate=Decimal('0.0')):
+    """Calculate total price including tax"""
+    subtotal = Decimal('0')
+    for item in items:
+        subtotal += item.get_subtotal()
+
+    tax = subtotal * tax_rate
+    return subtotal + tax
+
+def apply_discount(total, discount_rate):
+    """Apply discount to total"""
+    return total * (Decimal('1') - discount_rate)
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items, tax_rate=Decimal('0.08'))
+
+    if total > 100:
+        total = apply_discount(total, Decimal('0.1'))
+
+    # Apply coupon if available
+    if order.coupon_code:
+        total = apply_coupon(total, order.coupon_code)
+
+    # Log the order
+    logger.info(f"Order processed: ${total:.2f}")
+
+    return total
+
+def apply_coupon(total, coupon_code):
+    """Apply coupon discount"""
+    # Simple coupon validation
+    if coupon_code == "SAVE10":
+        return total * Decimal('0.9')
+    return total
+
+class ShoppingCart:
+    def __init__(self, customer=None):
+        self.items: List[CartItem] = []
+        self.customer = customer
+        self.created_at = datetime.datetime.now()
+        self.updated_at = self.created_at
+
+    def add_item(self, product, quantity=1):
+        if not product.is_available():
+            raise ValueError("Product not available")
+
+        # Check if product already in cart
+        for item in self.items:
+            if item.product.id == product.id:
+                item.update_quantity(item.quantity + quantity)
+                self.updated_at = datetime.datetime.now()
+                return
+
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+        self.updated_at = datetime.datetime.now()
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+        self.updated_at = datetime.datetime.now()
+
+    def get_total(self):
+        return calculate_total(self.items, tax_rate=Decimal('0.08'))
+
+    def clear(self):
+        self.items = []
+        self.updated_at = datetime.datetime.now()
+
+    def get_item_count(self):
+        return sum(item.quantity for item in self.items)
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+        self.coupon_code = None
+        self.tracking_number = None
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        self.tracking_number = self._generate_tracking_number()
+        logger.info(f"Order confirmed for {self.customer.name}")
+
+    def _generate_tracking_number(self):
+        return f"TRK{self.order_date.timestamp()}"
+
+    def cancel(self):
+        if self.status == "shipped":
+            raise ValueError("Cannot cancel shipped order")
+        self.status = "cancelled"
+
+class Customer:
+    def __init__(self, name, email, phone=""):
+        self.name = name
+        self.email = email
+        self.phone = phone
+        self.orders: List[Order] = []
+        self.loyalty_points = 0
+
+    def place_order(self, cart):
+        if not self.email:
+            raise ValueError("Customer email required")
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+    def add_loyalty_points(self, points):
+        self.loyalty_points += points
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    if not email:
+        return False
+    return "@" in email and "." in email and len(email) > 5
+
+def send_confirmation_email(customer, order):
+    """Send order confirmation email"""
+    logger.info(f"Sending confirmation to {customer.email}")
+    # Email sending logic here
+    pass
+
+# E-commerce System - Version 2.0
+# Enhanced implementation with tax, discounts, and better validation
+
+import datetime
+import logging
+from decimal import Decimal
+from typing import List, Optional
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category, description=""):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.description = description
+        self.stock = 0
+        self.sku = f"SKU-{id}"
+
+    def update_stock(self, quantity):
+        if self.stock + quantity < 0:
+            raise ValueError("Insufficient stock")
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} ({self.sku}) - ${self.price}"
+
+    def is_available(self):
+        return self.stock > 0
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        if quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+    def update_quantity(self, new_quantity):
+        if new_quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.quantity = new_quantity
+
+def calculate_total(items, tax_rate=Decimal('0.0')):
+    """Calculate total price including tax"""
+    subtotal = Decimal('0')
+    for item in items:
+        subtotal += item.get_subtotal()
+
+    tax = subtotal * tax_rate
+    return subtotal + tax
+
+def apply_discount(total, discount_rate):
+    """Apply discount to total"""
+    return total * (Decimal('1') - discount_rate)
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items, tax_rate=Decimal('0.08'))
+
+    if total > 100:
+        total = apply_discount(total, Decimal('0.1'))
+
+    # Apply coupon if available
+    if order.coupon_code:
+        total = apply_coupon(total, order.coupon_code)
+
+    # Log the order
+    logger.info(f"Order processed: ${total:.2f}")
+
+    return total
+
+def apply_coupon(total, coupon_code):
+    """Apply coupon discount"""
+    # Simple coupon validation
+    if coupon_code == "SAVE10":
+        return total * Decimal('0.9')
+    return total
+
+class ShoppingCart:
+    def __init__(self, customer=None):
+        self.items: List[CartItem] = []
+        self.customer = customer
+        self.created_at = datetime.datetime.now()
+        self.updated_at = self.created_at
+
+    def add_item(self, product, quantity=1):
+        if not product.is_available():
+            raise ValueError("Product not available")
+
+        # Check if product already in cart
+        for item in self.items:
+            if item.product.id == product.id:
+                item.update_quantity(item.quantity + quantity)
+                self.updated_at = datetime.datetime.now()
+                return
+
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+        self.updated_at = datetime.datetime.now()
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+        self.updated_at = datetime.datetime.now()
+
+    def get_total(self):
+        return calculate_total(self.items, tax_rate=Decimal('0.08'))
+
+    def clear(self):
+        self.items = []
+        self.updated_at = datetime.datetime.now()
+
+    def get_item_count(self):
+        return sum(item.quantity for item in self.items)
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+        self.coupon_code = None
+        self.tracking_number = None
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        self.tracking_number = self._generate_tracking_number()
+        logger.info(f"Order confirmed for {self.customer.name}")
+
+    def _generate_tracking_number(self):
+        return f"TRK{self.order_date.timestamp()}"
+
+    def cancel(self):
+        if self.status == "shipped":
+            raise ValueError("Cannot cancel shipped order")
+        self.status = "cancelled"
+
+class Customer:
+    def __init__(self, name, email, phone=""):
+        self.name = name
+        self.email = email
+        self.phone = phone
+        self.orders: List[Order] = []
+        self.loyalty_points = 0
+
+    def place_order(self, cart):
+        if not self.email:
+            raise ValueError("Customer email required")
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+    def add_loyalty_points(self, points):
+        self.loyalty_points += points
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    if not email:
+        return False
+    return "@" in email and "." in email and len(email) > 5
+
+def send_confirmation_email(customer, order):
+    """Send order confirmation email"""
+    logger.info(f"Sending confirmation to {customer.email}")
+    # Email sending logic here
+    pass
+
+# E-commerce System - Version 2.0
+# Enhanced implementation with tax, discounts, and better validation
+
+import datetime
+import logging
+from decimal import Decimal
+from typing import List, Optional
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category, description=""):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.description = description
+        self.stock = 0
+        self.sku = f"SKU-{id}"
+
+    def update_stock(self, quantity):
+        if self.stock + quantity < 0:
+            raise ValueError("Insufficient stock")
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} ({self.sku}) - ${self.price}"
+
+    def is_available(self):
+        return self.stock > 0
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        if quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+    def update_quantity(self, new_quantity):
+        if new_quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.quantity = new_quantity
+
+def calculate_total(items, tax_rate=Decimal('0.0')):
+    """Calculate total price including tax"""
+    subtotal = Decimal('0')
+    for item in items:
+        subtotal += item.get_subtotal()
+
+    tax = subtotal * tax_rate
+    return subtotal + tax
+
+def apply_discount(total, discount_rate):
+    """Apply discount to total"""
+    return total * (Decimal('1') - discount_rate)
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items, tax_rate=Decimal('0.08'))
+
+    if total > 100:
+        total = apply_discount(total, Decimal('0.1'))
+
+    # Apply coupon if available
+    if order.coupon_code:
+        total = apply_coupon(total, order.coupon_code)
+
+    # Log the order
+    logger.info(f"Order processed: ${total:.2f}")
+
+    return total
+
+def apply_coupon(total, coupon_code):
+    """Apply coupon discount"""
+    # Simple coupon validation
+    if coupon_code == "SAVE10":
+        return total * Decimal('0.9')
+    return total
+
+class ShoppingCart:
+    def __init__(self, customer=None):
+        self.items: List[CartItem] = []
+        self.customer = customer
+        self.created_at = datetime.datetime.now()
+        self.updated_at = self.created_at
+
+    def add_item(self, product, quantity=1):
+        if not product.is_available():
+            raise ValueError("Product not available")
+
+        # Check if product already in cart
+        for item in self.items:
+            if item.product.id == product.id:
+                item.update_quantity(item.quantity + quantity)
+                self.updated_at = datetime.datetime.now()
+                return
+
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+        self.updated_at = datetime.datetime.now()
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+        self.updated_at = datetime.datetime.now()
+
+    def get_total(self):
+        return calculate_total(self.items, tax_rate=Decimal('0.08'))
+
+    def clear(self):
+        self.items = []
+        self.updated_at = datetime.datetime.now()
+
+    def get_item_count(self):
+        return sum(item.quantity for item in self.items)
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+        self.coupon_code = None
+        self.tracking_number = None
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        self.tracking_number = self._generate_tracking_number()
+        logger.info(f"Order confirmed for {self.customer.name}")
+
+    def _generate_tracking_number(self):
+        return f"TRK{self.order_date.timestamp()}"
+
+    def cancel(self):
+        if self.status == "shipped":
+            raise ValueError("Cannot cancel shipped order")
+        self.status = "cancelled"
+
+class Customer:
+    def __init__(self, name, email, phone=""):
+        self.name = name
+        self.email = email
+        self.phone = phone
+        self.orders: List[Order] = []
+        self.loyalty_points = 0
+
+    def place_order(self, cart):
+        if not self.email:
+            raise ValueError("Customer email required")
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+    def add_loyalty_points(self, points):
+        self.loyalty_points += points
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    if not email:
+        return False
+    return "@" in email and "." in email and len(email) > 5
+
+def send_confirmation_email(customer, order):
+    """Send order confirmation email"""
+    logger.info(f"Sending confirmation to {customer.email}")
+    # Email sending logic here
+    pass
+
+# E-commerce System - Version 2.0
+# Enhanced implementation with tax, discounts, and better validation
+
+import datetime
+import logging
+from decimal import Decimal
+from typing import List, Optional
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category, description=""):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.description = description
+        self.stock = 0
+        self.sku = f"SKU-{id}"
+
+    def update_stock(self, quantity):
+        if self.stock + quantity < 0:
+            raise ValueError("Insufficient stock")
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} ({self.sku}) - ${self.price}"
+
+    def is_available(self):
+        return self.stock > 0
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        if quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+    def update_quantity(self, new_quantity):
+        if new_quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.quantity = new_quantity
+
+def calculate_total(items, tax_rate=Decimal('0.0')):
+    """Calculate total price including tax"""
+    subtotal = Decimal('0')
+    for item in items:
+        subtotal += item.get_subtotal()
+
+    tax = subtotal * tax_rate
+    return subtotal + tax
+
+def apply_discount(total, discount_rate):
+    """Apply discount to total"""
+    return total * (Decimal('1') - discount_rate)
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items, tax_rate=Decimal('0.08'))
+
+    if total > 100:
+        total = apply_discount(total, Decimal('0.1'))
+
+    # Apply coupon if available
+    if order.coupon_code:
+        total = apply_coupon(total, order.coupon_code)
+
+    # Log the order
+    logger.info(f"Order processed: ${total:.2f}")
+
+    return total
+
+def apply_coupon(total, coupon_code):
+    """Apply coupon discount"""
+    # Simple coupon validation
+    if coupon_code == "SAVE10":
+        return total * Decimal('0.9')
+    return total
+
+class ShoppingCart:
+    def __init__(self, customer=None):
+        self.items: List[CartItem] = []
+        self.customer = customer
+        self.created_at = datetime.datetime.now()
+        self.updated_at = self.created_at
+
+    def add_item(self, product, quantity=1):
+        if not product.is_available():
+            raise ValueError("Product not available")
+
+        # Check if product already in cart
+        for item in self.items:
+            if item.product.id == product.id:
+                item.update_quantity(item.quantity + quantity)
+                self.updated_at = datetime.datetime.now()
+                return
+
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+        self.updated_at = datetime.datetime.now()
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+        self.updated_at = datetime.datetime.now()
+
+    def get_total(self):
+        return calculate_total(self.items, tax_rate=Decimal('0.08'))
+
+    def clear(self):
+        self.items = []
+        self.updated_at = datetime.datetime.now()
+
+    def get_item_count(self):
+        return sum(item.quantity for item in self.items)
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+        self.coupon_code = None
+        self.tracking_number = None
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        self.tracking_number = self._generate_tracking_number()
+        logger.info(f"Order confirmed for {self.customer.name}")
+
+    def _generate_tracking_number(self):
+        return f"TRK{self.order_date.timestamp()}"
+
+    def cancel(self):
+        if self.status == "shipped":
+            raise ValueError("Cannot cancel shipped order")
+        self.status = "cancelled"
+
+class Customer:
+    def __init__(self, name, email, phone=""):
+        self.name = name
+        self.email = email
+        self.phone = phone
+        self.orders: List[Order] = []
+        self.loyalty_points = 0
+
+    def place_order(self, cart):
+        if not self.email:
+            raise ValueError("Customer email required")
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+    def add_loyalty_points(self, points):
+        self.loyalty_points += points
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    if not email:
+        return False
+    return "@" in email and "." in email and len(email) > 5
+
+def send_confirmation_email(customer, order):
+    """Send order confirmation email"""
+    logger.info(f"Sending confirmation to {customer.email}")
+    # Email sending logic here
+    pass
+
+# E-commerce System - Version 2.0
+# Enhanced implementation with tax, discounts, and better validation
+
+import datetime
+import logging
+from decimal import Decimal
+from typing import List, Optional
+
+logger = logging.getLogger(__name__)
+
+class Product:
+    def __init__(self, id, name, price, category, description=""):
+        self.id = id
+        self.name = name
+        self.price = Decimal(str(price))
+        self.category = category
+        self.description = description
+        self.stock = 0
+        self.sku = f"SKU-{id}"
+
+    def update_stock(self, quantity):
+        if self.stock + quantity < 0:
+            raise ValueError("Insufficient stock")
+        self.stock += quantity
+        logger.info(f"Updated stock for {self.name}: {self.stock}")
+
+    def get_info(self):
+        return f"{self.name} ({self.sku}) - ${self.price}"
+
+    def is_available(self):
+        return self.stock > 0
+
+class CartItem:
+    def __init__(self, product, quantity=1):
+        if quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.product = product
+        self.quantity = quantity
+
+    def get_subtotal(self):
+        return self.product.price * self.quantity
+
+    def update_quantity(self, new_quantity):
+        if new_quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        self.quantity = new_quantity
+
+def calculate_total(items, tax_rate=Decimal('0.0')):
+    """Calculate total price including tax"""
+    subtotal = Decimal('0')
+    for item in items:
+        subtotal += item.get_subtotal()
+
+    tax = subtotal * tax_rate
+    return subtotal + tax
+
+def apply_discount(total, discount_rate):
+    """Apply discount to total"""
+    return total * (Decimal('1') - discount_rate)
+
+def process_order(order):
+    items = order.get_items()
+    total = calculate_total(items, tax_rate=Decimal('0.08'))
+
+    if total > 100:
+        total = apply_discount(total, Decimal('0.1'))
+
+    # Apply coupon if available
+    if order.coupon_code:
+        total = apply_coupon(total, order.coupon_code)
+
+    # Log the order
+    logger.info(f"Order processed: ${total:.2f}")
+
+    return total
+
+def apply_coupon(total, coupon_code):
+    """Apply coupon discount"""
+    # Simple coupon validation
+    if coupon_code == "SAVE10":
+        return total * Decimal('0.9')
+    return total
+
+class ShoppingCart:
+    def __init__(self, customer=None):
+        self.items: List[CartItem] = []
+        self.customer = customer
+        self.created_at = datetime.datetime.now()
+        self.updated_at = self.created_at
+
+    def add_item(self, product, quantity=1):
+        if not product.is_available():
+            raise ValueError("Product not available")
+
+        # Check if product already in cart
+        for item in self.items:
+            if item.product.id == product.id:
+                item.update_quantity(item.quantity + quantity)
+                self.updated_at = datetime.datetime.now()
+                return
+
+        cart_item = CartItem(product, quantity)
+        self.items.append(cart_item)
+        self.updated_at = datetime.datetime.now()
+
+    def remove_item(self, product):
+        self.items = [item for item in self.items if item.product.id != product.id]
+        self.updated_at = datetime.datetime.now()
+
+    def get_total(self):
+        return calculate_total(self.items, tax_rate=Decimal('0.08'))
+
+    def clear(self):
+        self.items = []
+        self.updated_at = datetime.datetime.now()
+
+    def get_item_count(self):
+        return sum(item.quantity for item in self.items)
+
+class Order:
+    def __init__(self, cart, customer):
+        self.cart = cart
+        self.customer = customer
+        self.order_date = datetime.datetime.now()
+        self.status = "pending"
+        self.coupon_code = None
+        self.tracking_number = None
+
+    def get_items(self):
+        return self.cart.items
+
+    def confirm(self):
+        self.status = "confirmed"
+        self.tracking_number = self._generate_tracking_number()
+        logger.info(f"Order confirmed for {self.customer.name}")
+
+    def _generate_tracking_number(self):
+        return f"TRK{self.order_date.timestamp()}"
+
+    def cancel(self):
+        if self.status == "shipped":
+            raise ValueError("Cannot cancel shipped order")
+        self.status = "cancelled"
+
+class Customer:
+    def __init__(self, name, email, phone=""):
+        self.name = name
+        self.email = email
+        self.phone = phone
+        self.orders: List[Order] = []
+        self.loyalty_points = 0
+
+    def place_order(self, cart):
+        if not self.email:
+            raise ValueError("Customer email required")
+        order = Order(cart, self)
+        self.orders.append(order)
+        return order
+
+    def add_loyalty_points(self, points):
+        self.loyalty_points += points
+
+# Utility functions
+def format_price(amount):
+    return f"${amount:.2f}"
+
+def validate_email(email):
+    if not email:
+        return False
+    return "@" in email and "." in email and len(email) > 5
+
+def send_confirmation_email(customer, order):
+    """Send order confirmation email"""
+    logger.info(f"Sending confirmation to {customer.email}")
+    # Email sending logic here
+    pass
+
