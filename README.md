@@ -1,5 +1,7 @@
 # Meld Web Port - Proof of Concept
 
+[![Run Unit Tests](https://github.com/dgtlmoon/meld-canvas-html/actions/workflows/tests.yml/badge.svg?style=for-the-badge)](https://github.com/dgtlmoon/meld-canvas-html/actions/workflows/tests.yml)
+
 A web-based visual diff viewer inspired by [Meld](https://meldmerge.org/), the popular Linux/GTK diff tool. This proof of concept recreates Meld's signature 3-column interface with animated connection curves between changes.
 
 ![Screenshot](screenshot.png)
