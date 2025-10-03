@@ -12,7 +12,7 @@ cp file1.txt a.txt
 cp file2.txt b.txt
 
 # 2. Generate the diff viewer
-python3 meld-port.py
+python3 meld_port.py
 
 # 3. Open test-output.html in your browser
 ```

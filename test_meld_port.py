@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
 """
-Unit tests for meld-port.py
+Unit tests for meld_port.py
 """
 
 import unittest
-import importlib.util
-import sys
-from pathlib import Path
 
-# Import meld-port.py which has a hyphen in its name
-spec = importlib.util.spec_from_file_location("meld_port", Path(__file__).parent / "meld-port.py")
-meld_port = importlib.util.module_from_spec(spec)
-sys.modules["meld_port"] = meld_port
-spec.loader.exec_module(meld_port)
+# Import meld_port module
+import meld_port
 
 compute_diff = meld_port.compute_diff
 compute_inline_diff = meld_port.compute_inline_diff
